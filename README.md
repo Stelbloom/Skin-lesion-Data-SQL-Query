@@ -120,7 +120,7 @@ These questions are answered with a series of **incrementally more complex queri
 
 ---
 
-## 🧮 Example SQL Analyses
+## 🧮 SQL Analyses
 
 > Note: in the SQL scripts, `table1` = `Patient_Info` and `table2` = `Lesion_Info`.
 
