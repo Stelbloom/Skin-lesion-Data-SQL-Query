@@ -1,0 +1,127 @@
+SQL: Create ML‑Ready Dataset for Training in Python
+Now, based on your existing SQL, let’s build one key query that:
+1. PostgreSQL: Create an ML‑ready view
+This view:
+
+Joins table1 (patients) and table2 (lesions)
+Creates a binary label is_malignant for MEL / BCC / SCC
+Casts your 'TRUE'/'false' style flags into real PostgreSQL BOOLEANs (better for both SQL and Python)
+
+
+CREATE OR REPLACE VIEW skin_lesion_features AS
+SELECT
+    -- IDs
+    t2.lesion_id,
+    t1.patient_id,
+
+    -- Target label
+    t2.diagnostic,
+    CASE
+        WHEN t2.diagnostic IN ('MEL', 'BCC', 'SCC') THEN 1
+        ELSE 0
+    END AS is_malignant,
+
+    -- Patient-level features (cast to proper types where useful)
+    t1.age,
+    t1.gender,
+    (t1.smoke = 'TRUE')          AS smoke_bool,
+    (t1.drink = 'TRUE')          AS drink_bool,
+    (t1.pesticide = 'TRUE')      AS pesticide_bool,
+    t1.background_father,
+    t1.background_mother,
+    (t1.skin_cancer_history = 'TRUE') AS skin_cancer_history_bool,
+    (t1.cancer_history = 'TRUE')      AS cancer_history_bool,
+    (t1.has_piped_water = 'TRUE')     AS has_piped_water_bool,
+    (t1.has_sewage_system = 'TRUE')   AS has_sewage_system_bool,
+
+    -- Lesion-level features
+    t2.fitspatrick,
+    t2.region,
+    t2.diameter_1,
+    t2.diameter_2,
+    (t2.itch = 'TRUE')      AS itch_bool,
+    (t2.grew = 'TRUE')      AS grew_bool,
+    (t2.hurt = 'TRUE')      AS hurt_bool,
+    (t2.changed = 'TRUE')   AS changed_bool,
+    (t2.bleed = 'TRUE')     AS bleed_bool,
+    (t2.elevation = 'TRUE') AS elevation_bool,
+    (t2.biopsed = 'TRUE')   AS biopsed_bool
+
+FROM table1 AS t1
+JOIN table2 AS t2
+    ON t1.patient_id = t2.patient_id;
+Run this once in PostgreSQL (e.g. in pgAdmin or psql).
+After that you can always query:
+
+
+SELECT * FROM skin_lesion_features LIMIT 5;
+2. Python: Connect to PostgreSQL and Train a Model
+You’ll need sqlalchemy and psycopg2:
+
+install sqlalchemy psycopg2-binary scikit-learn pandas so phython can read the Sql code
+pip install sqlalchemy psycopg2-binary scikit-learn pandas
+Then in Python (e.g. Jupyter notebook):
+
+
+import pandas as pd
+from sqlalchemy import create_engine
+from sklearn.model_selection import train_test_split
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, f1_score
+
+# 1. PostgreSQL connection (adjust credentials!)
+engine = create_engine(
+    "postgresql+psycopg2://username:password@localhost:5432/your_database"
+)
+
+# 2. Load ML-ready data from the view you created
+df = pd.read_sql("SELECT * FROM skin_lesion_features;", engine)
+
+# 3. Features & target
+X = df.drop(columns=["is_malignant", "diagnostic", "lesion_id", "patient_id"])
+y = df["is_malignant"]
+
+# 4. Identify column types
+num_cols = X.select_dtypes(include=["int64", "float64"]).columns
+cat_cols = X.select_dtypes(include=["object", "bool"]).columns
+
+# 5. Preprocessing
+numeric_transformer = "passthrough"  # or StandardScaler() if you prefer
+categorical_transformer = OneHotEncoder(handle_unknown="ignore")
+
+preprocess = ColumnTransformer(
+    transformers=[
+        ("num", numeric_transformer, num_cols),
+        ("cat", categorical_transformer, cat_cols),
+    ]
+)
+
+# 6. Model pipeline
+model = Pipeline(
+    steps=[
+        ("preprocess", preprocess),
+        ("clf", RandomForestClassifier(
+            n_estimators=300,
+            random_state=42,
+            n_jobs=-1
+        )),
+    ]
+)
+
+# 7. Train/test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,
+    random_state=42,
+    stratify=y
+)
+
+# 8. Fit & evaluate
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+print("F1 (macro):", f1_score(y_test, y_pred, average="macro"))
+print(classification_report(y_test, y_pred))
