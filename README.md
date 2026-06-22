@@ -235,7 +235,7 @@ You can adapt this to match your actual file and folder names.
 
 ---
 
-## 🖼 Visuals for the GitHub Page
+## 🖼 EDA Visuals in SQL
 
 ![Diagnostic Distribution](reports/figures/diagnostic_distribution.png)
 *Overall distribution of lesion diagnostic types (MEL, BCC, SCC, NEV, etc.).*
